@@ -39,6 +39,7 @@ Commands (and sections of a "show technical-support") supported
 - show interfaces status
 - show cdp neighbors
 - show cdp neighbors detail
+- show diag
 
 Excel file output format
 ------------------------
@@ -98,4 +99,11 @@ CDP neigbors sheet:
 - Remote interface: interface of remote device
 - Remote device IP: IP address of remote device
 
+Modules sheet:
+
+- Name: hostname of local device
+- Slot: main slot of module
+- Subslot: where in main slot is the module
+- Part number: of the module
+- Serial number: of the module
 

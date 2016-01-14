@@ -9,7 +9,7 @@
 #
 # usage: python tech2xl <Excel output file> <inputfile>...
 #
-# Author: Andrés González, dec 2015
+# Author: AndrÃ©s GonzÃ¡lez, dec 2015
 
 import re, glob, sys, csv, collections
 import xlwt
@@ -20,14 +20,14 @@ def expand(s, list):
             return item
     return None
 
-print("tech2xl v1.0")
+print("tech2xl v1.1")
 
 if len(sys.argv) < 3:
     print("Usage: tech2xl <output file> <input files>...")
     sys.exit(2)
 
 commands = [["show"], \
-            ["cdp", "technical-support", "running-config", "interfaces"], \
+            ["cdp", "technical-support", "running-config", "interfaces", "diag"], \
             ["neighbors", "status"], \
             ["detail"]]
 
@@ -48,6 +48,7 @@ int_types = ["Ethernet", "FastEthernet", "GigabitEthernet", "Gigabit", "TenGigab
 systeminfo = collections.OrderedDict()
 intinfo = collections.OrderedDict()
 cdpinfo = collections.OrderedDict()
+diaginfo = collections.OrderedDict()
 
 #These are the fields to be extracted
 systemfields = ["Name", "Model", "System ID", "Mother ID", "Image"]
@@ -83,6 +84,8 @@ intfields = ["Name", \
 
 cdpfields = ["Name", "Local interface", "Remote device", "Remote interface", "Remote device IP"]
 
+diagfields = ["Name", "Slot", "Subslot", "Serial number", "Part number"]
+
 masks = ["128.0.0.0","192.0.0.0","224.0.0.0","240.0.0.0","248.0.0.0","252.0.0.0","254.0.0.0","255.0.0.0","255.128.0.0","255.192.0.0","255.224.0.0","255.240.0.0","255.248.0.0","255.252.0.0","255.254.0.0","255.255.0.0","255.255.128.0","255.255.192.0","255.255.224.0","255.255.240.0","255.255.248.0","255.255.252.0","255.255.254.0","255.255.255.0","255.255.255.128","255.255.255.192","255.255.255.224","255.255.255.240","255.255.255.248","255.255.255.252","255.255.255.254","255.255.255.255"]
 
 # This is the name of the router
@@ -92,6 +95,8 @@ name = ''
 command = ''
 section = ''
 item = ''
+
+take_next_line = ''
 
 # takes all arguments starting from 2nd
 for arg in sys.argv[2:]:
@@ -311,6 +316,59 @@ for arg in sys.argv[2:]:
 
                     cdp_neighbor = ''
 
+
+
+            # processes "show diag" command
+            if command == 'show diag':
+                # extracts information as per patterns
+                m = re.search("^(\S.*):$", line)
+                if m and not re.search("EEPROM contents", line):
+                    slot = m.group(1)
+                    subslot = ''
+                    item = slot
+                    if (name + item) not in cdpinfo.keys():
+                        diaginfo[name + item] = collections.OrderedDict()
+                        diaginfo[name + item]['Part number'] = ''
+                        diaginfo[name + item]['Serial number'] = ''
+                    diaginfo[name + item]['Name'] = name
+                    diaginfo[name + item]['Slot'] = slot
+                    diaginfo[name + item]['Subslot'] = subslot
+
+
+                # submodules are showed indented from base modules                    
+                m = re.search("^\s+(\S.*):$", line)
+                if m and not re.search("EEPROM contents", line):
+                    subslot = m.group(1)
+                    item = slot + subslot
+                    if (name + item) not in cdpinfo.keys():
+                        diaginfo[name + item] = collections.OrderedDict()
+                        diaginfo[name + item]['Part number'] = ''
+                        diaginfo[name + item]['Serial number'] = ''
+                    diaginfo[name + item]['Name'] = name
+                    diaginfo[name + item]['Slot'] = slot
+                    diaginfo[name + item]['Subslot'] = subslot
+
+                    
+                m = re.search("\s+Product \(FRU\) Number\s+: (.+)", line)
+                if m:
+                    diaginfo[name + item]['Part number'] = m.group(1)
+
+                m = re.search("\s+FRU Part Number\s+(.+)", line)
+                if m:
+                    diaginfo[name + item]['Part number'] = m.group(1)
+
+
+                m = re.search("\s+PCB Serial Number\s+: (.+)", line)
+                if m:
+                   diaginfo[name + item]['Serial number'] = m.group(1)
+
+                m = re.search("\s*Serial number\s+(\S+)", line)
+                if m:
+                   diaginfo[name + item]['Serial number'] = m.group(1)
+ 
+
+
+
             # processes "show CDP neighbors" command or section of sh tech
             if command == 'show cdp neighbors detail':
                 # extracts information as per patterns
@@ -345,59 +403,96 @@ for arg in sys.argv[2:]:
 
 # Writes all the information collected
 
-wb = xlwt.Workbook()
-ws_system = wb.add_sheet('System')
-ws_int = wb.add_sheet('Interfaces')
-ws_cdp = wb.add_sheet('CDP neighbors')
-
-
 style_header = xlwt.easyxf('font: bold 1')
 
 # Writes system information
-for i, value in enumerate(systemfields):
-    ws_system.write(0, i, value, style_header)
+cont = len(systeminfo.keys())
+print(cont, " devices")
 
-row = 1
-for name in systeminfo.keys():
+if cont > 0:
+    wb = xlwt.Workbook()
+    ws_system = wb.add_sheet('System')
 
-    for col in range(0,len(systemfields)):
+    for i, value in enumerate(systemfields):
+        ws_system.write(0, i, value, style_header)
 
-        ws_system.write(row, col, systeminfo[name][systemfields[col]])
+    row = 1
+    for name in systeminfo.keys():
 
-    row = row + 1
+        for col in range(0,len(systemfields)):
 
-
-# Writes interface information
-for i, value in enumerate(intfields):
-    ws_int.write(0, i, value, style_header)
-
-row = 1
-for name in intinfo.keys():
-    for item in intinfo[name].keys():
-
-        for col in range(0,len(intfields)):
-
-            ws_int.write(row, col, intinfo[name][item][intfields[col]])
+            ws_system.write(row, col, systeminfo[name][systemfields[col]])
 
         row = row + 1
 
-# Writes CDP information
-for i, value in enumerate(cdpfields):
-    ws_cdp.write(0, i, value, style_header)
+    # Writes interface information
+    cont = 0
+    for name in intinfo.keys():
+        cont = cont + len(intinfo[name])
+    print(cont, " interfaces")
 
-row = 1
-for name in cdpinfo.keys():
-    for item in cdpinfo[name].keys():
+    if cont > 0:
+        ws_int = wb.add_sheet('Interfaces')
 
-        for col in range(0,len(cdpfields)):
+        for i, value in enumerate(intfields):
+            ws_int.write(0, i, value, style_header)
 
-            ws_cdp.write(row, col, cdpinfo[name][item][cdpfields[col]])
+        row = 1
+        for name in intinfo.keys():
+            for item in intinfo[name].keys():
 
-        row = row + 1
+                for col in range(0,len(intfields)):
 
-try:
-    wb.save(sys.argv[1])
-except IOError as e:
-    print("Could not write " + sys.argv[1] + ". Check if file is not open in Excel. \nError: ", e)
-    sys.exit(1)
+                    ws_int.write(row, col, intinfo[name][item][intfields[col]])
+
+                row = row + 1
+
+    # Writes CDP information
+    for name in cdpinfo.keys():
+        cont = cont + len(cdpinfo[name])
+    print(cont, " neighbors")
+
+    if cont > 0:
+        ws_cdp = wb.add_sheet('CDP neighbors')
+
+        for i, value in enumerate(cdpfields):
+            ws_cdp.write(0, i, value, style_header)
+
+        row = 1
+        for name in cdpinfo.keys():
+            for item in cdpinfo[name].keys():
+
+                for col in range(0,len(cdpfields)):
+
+                    ws_cdp.write(row, col, cdpinfo[name][item][cdpfields[col]])
+
+                row = row + 1
+
+    # Writes show diag information
+    cont = len(diaginfo.keys())
+    print(cont, " modules")
+
+    if cont > 0:
+        ws_diag = wb.add_sheet('Modules')
+
+        for i, value in enumerate(diagfields):
+            ws_diag.write(0, i, value, style_header)
+
+        row = 1
+        for item in diaginfo.keys():
+
+            for col in range(0,len(diagfields)):
+
+                ws_diag.write(row, col, diaginfo[item][diagfields[col]])
+
+            row = row + 1
+
+    try:
+        wb.save(sys.argv[1])
+    except IOError as e:
+        print("Could not write " + sys.argv[1] + ". Check if file is not open in Excel. \nError: ", e)
+        sys.exit(1)
+
+else:
+    print("No device found")
 
