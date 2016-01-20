@@ -9,10 +9,11 @@
 #
 # usage: python tech2xl <Excel output file> <inputfile>...
 #
-# Author: AndrÃ©s GonzÃ¡lez, dec 2015
+# Author: Andrés González, dec 2015
 
 import re, glob, sys, csv, collections
 import xlwt
+import time
 
 def expand(s, list):
     for item in list:
@@ -20,6 +21,7 @@ def expand(s, list):
             return item
     return None
 
+start_time = time.time()
 print("tech2xl v1.1")
 
 if len(sys.argv) < 3:
@@ -125,7 +127,7 @@ for arg in sys.argv[2:]:
 
                 if name not in intinfo.keys():
                     intinfo[name] = collections.OrderedDict()
-                    
+                continue
 
             # detects section within show tech
             m = re.search("^------------------ (.*) ------------------$", line)
@@ -133,6 +135,7 @@ for arg in sys.argv[2:]:
                 command = m.group(1)
                 section = ''
                 item = ''
+                continue
 
             # processes "show running-config" command or section of sh tech
             if command == 'show running-config':
@@ -150,31 +153,38 @@ for arg in sys.argv[2:]:
                         
                         intinfo[name][item]['Type'] = re.split('\d', item)[0]
                         intinfo[name][item]['Number'] = re.split('\D+', item, 1)[1]
+                    continue
 
                 if section == 'interface':
 
                     if line == '!':
                         section = ''
+                        continue
 
                     m = re.match(" description (.*)", line)
                     if m:
                         intinfo[name][item]['Description'] = m.group(1)
+                        continue
 
                     m = re.match(" switchport mode (\w*)", line)
                     if m:
                         intinfo[name][item]['Switchport mode'] = m.group(1)
+                        continue
 
                     m = re.search(" switchport access vlan (\d+)", line)
                     if m:
                         intinfo[name][item]["Access vlan"] = m.group(1)
+                        continue
 
                     m = re.search(" switchport voice vlan (\d+)", line)
                     if m:
                         intinfo[name][item]["Voice vlan"] = m.group(1)
+                        continue
 
                     m = re.search(" frame-relay interface-dlci (\d+)", line)
                     if m:
                         intinfo[name][item]["DLCI"] = int(m.group(1))
+                        continue
 
                     m = re.search("^ ip address ([\d|\.]+) ([\d|\.]+)", line)
                     if m:
@@ -195,6 +205,7 @@ for arg in sys.argv[2:]:
                                                          str(b & int(m.group(2))) + '.' + \
                                                          str(c & int(m.group(3))) + '.' + \
                                                          str(d & int(m.group(4)))
+                        continue
 
             # processes "show version" command or section of sh tech
             if command == 'show version':
@@ -202,38 +213,47 @@ for arg in sys.argv[2:]:
                 m = re.search("Processor board ID (.*)", line)
                 if m:
                     systeminfo[name]['System ID'] = m.group(1)
+                    continue
 
                 m = re.search("Model number\s*: (.*)", line)
                 if m:
                     systeminfo[name]['Model'] = m.group(1)
+                    continue
 
                 m = re.search("^cisco (.*) processor", line)
                 if m:
                     systeminfo[name]['Model'] = m.group(1)
+                    continue
 
                 m = re.search("^Cisco (.*) \(revision", line)
                 if m:
                     systeminfo[name]['Model'] = m.group(1)
+                    continue
 
                 m = re.search("Motherboard serial number\s*: (.*)", line)
                 if m:
                     systeminfo[name]['Mother ID'] = m.group(1)
+                    continue
 
                 m = re.search('System image file is \"flash:\/?(.*)\.bin\"', line)
                 if m:
                     systeminfo[name]['Image'] = m.group(1)
+                    continue
 
                 m = re.search('System image file is \"flash:\/.*\/(.*)\.bin\"', line)
                 if m:
                     systeminfo[name]['Image'] = m.group(1)
+                    continue
 
                 m = re.search('System image file is \"bootflash:(.*)\.bin\"', line)
                 if m:
                     systeminfo[name]['Image'] = m.group(1)
+                    continue
 
                 m = re.search('System image file is \"sup-bootflash:(.*)\.bin\"', line)
                 if m:
                     systeminfo[name]['Image'] = m.group(1)
+                    continue
 
             # processes "show interfaces" command or section of sh tech
             if command == 'show interfaces':
@@ -249,23 +269,28 @@ for arg in sys.argv[2:]:
 
                     intinfo[name][item]['Status'] = m.group(2)
                     intinfo[name][item]['Line protocol'] = m.group(3)
+                    continue
 
                 m = re.search("Hardware is (.+), address is ([\w|\.]+)", line)
                 if m:
                     intinfo[name][item]['Hardware'] = m.group(1)
                     intinfo[name][item]['Mac address'] = m.group(2)
+                    continue
 
                 m = re.search("Hardware is ([\w\s-]+)$", line)
                 if m:
                     intinfo[name][item]['Hardware'] = m.group(1)
+                    continue
 
                 m = re.search("^  Encapsulation ([\d|\w|\s|-]+),", line)
                 if m:
                     intinfo[name][item]['Encapsulation'] = m.group(1)
+                    continue
 
                 m = re.search("^  Description: (.*)", line)
                 if m:
                     intinfo[name][item]['Description'] = m.group(1)
+                    continue
 
                 m = re.search("^  Internet address is ([\d|\.]+)\/(\d+)", line)
                 if m:
@@ -286,50 +311,56 @@ for arg in sys.argv[2:]:
                                                      str(b & int(m.group(2))) + '.' + \
                                                      str(c & int(m.group(3))) + '.' + \
                                                      str(d & int(m.group(4)))
+                    continue
 
                 m = re.search("(\d+) input errors", line)
                 if m:
                     intinfo[name][item]['Input errors'] = int(m.group(1))
 
-                m = re.search("(\d+) CRC", line)
-                if m:
-                    intinfo[name][item]['CRC'] = int(m.group(1))
+                    m = re.search("(\d+) CRC", line)
+                    if m:
+                        intinfo[name][item]['CRC'] = int(m.group(1))
 
-                m = re.search("(\d+) frame", line)
-                if m:
-                    intinfo[name][item]['Frame errors'] = int(m.group(1))
+                    m = re.search("(\d+) frame", line)
+                    if m:
+                        intinfo[name][item]['Frame errors'] = int(m.group(1))
 
-                m = re.search("(\d+) overrun", line)
-                if m:
-                    intinfo[name][item]['Overrun'] = int(m.group(1))
+                    m = re.search("(\d+) overrun", line)
+                    if m:
+                        intinfo[name][item]['Overrun'] = int(m.group(1))
 
-                m = re.search("(\d+) ignored", line)
-                if m:
-                    intinfo[name][item]['Ignored'] = int(m.group(1))
+                    m = re.search("(\d+) ignored", line)
+                    if m:
+                        intinfo[name][item]['Ignored'] = int(m.group(1))
+
+                    continue
 
                 m = re.search("(\d+) output errors", line)
                 if m:
                     intinfo[name][item]['Output errors'] = int(m.group(1))
 
-                m = re.search("(\d+) collisions", line)
-                if m:
-                    intinfo[name][item]['Collisions'] = int(m.group(1))
+                    m = re.search("(\d+) collisions", line)
+                    if m:
+                        intinfo[name][item]['Collisions'] = int(m.group(1))
 
-                m = re.search("(\d+) interface resets", line)
-                if m:
-                    intinfo[name][item]['Interface resets'] = int(m.group(1))
+                    m = re.search("(\d+) interface resets", line)
+                    if m:
+                        intinfo[name][item]['Interface resets'] = int(m.group(1))
+                    continue
 
                 m = re.search("(\w+) Duplex, (\d+)Mbps, link type is (\w+), media type is (.*)", line)
                 if m:
                     intinfo[name][item]['Duplex'] = m.group(3) + "-" + m.group(1)
                     intinfo[name][item]['Speed'] = m.group(3) + "-" + m.group(2)
                     intinfo[name][item]['Media type'] = m.group(4)
+                    continue
 
                 m = re.search("(\w+)-duplex, (\d+)Mb/s, media type is (.*)", line)
                 if m:
                     intinfo[name][item]['Duplex'] = m.group(1)
                     intinfo[name][item]['Speed'] = m.group(2)
                     intinfo[name][item]['Media type'] = m.group(3)
+                    continue
 
 
 
@@ -366,20 +397,16 @@ for arg in sys.argv[2:]:
                         intinfo[name][item]['Media type'] = m.group(6)
 
                         
-                        #intinfo[name][item]['Duplex'] = line[53:59].strip()                
-                        #intinfo[name][item]['Speed'] = line[60:66].strip()                
-
-
-
 
             # processes "show CDP neighbors" command or section of sh tech
             if command == 'show cdp neighbors':
                 # extracts information as per patterns
 
-                m = re.search("^([a-zA-Z0-9][a-zA-Z0-9_\-\.]*)", line)
+                m = re.search("^([a-zA-Z0-9][a-zA-Z0-9_\-\.]*)$", line)
                 if m:
                     if m.group(1) != "Capability" and m.group(1) != "Device":
                         cdp_neighbor = m.group(1)
+                    continue
 
                 m = re.search("^                 (...) (\S+)", line)
                 if m and cdp_neighbor != '':
@@ -389,7 +416,6 @@ for arg in sys.argv[2:]:
 
                     tmp = expand(remote_int_draft[:2], int_types)
 
-#                    remote_int = expand(line[68:70], int_types) + line[72:-1]
                     if tmp is not None:
                         remote_int = tmp + remote_int_draft[3:].strip()
                     else:
@@ -411,6 +437,7 @@ for arg in sys.argv[2:]:
                     cdpinfo[name + local_int + remote_int][cdp_neighbor]['Remote interface'] = remote_int
 
                     cdp_neighbor = ''
+                    continue
 
                 m = re.search("^([a-zA-Z0-9][a-zA-Z0-9_\-\.]*)\s+(...) ([\d/]+)\s+\d+\s+", line)
                 if m and cdp_neighbor != '':
@@ -421,7 +448,6 @@ for arg in sys.argv[2:]:
 
                     tmp = expand(remote_int_draft[:2], int_types)
 
-#                    remote_int = expand(line[68:70], int_types) + line[72:-1]
                     if tmp is not None:
                         remote_int = tmp + remote_int_draft[3:]
                     else:
@@ -457,6 +483,7 @@ for arg in sys.argv[2:]:
                     diaginfo[name + item]['Name'] = name
                     diaginfo[name + item]['Slot'] = slot
                     diaginfo[name + item]['Subslot'] = subslot
+                    continue
 
                 # submodules are showed indented from base modules                    
                 m = re.search("^\s+(\S.*):$", line)
@@ -468,14 +495,17 @@ for arg in sys.argv[2:]:
                     diaginfo[name + item]['Name'] = name
                     diaginfo[name + item]['Slot'] = slot
                     diaginfo[name + item]['Subslot'] = subslot
+                    continue
                     
                 m = re.search("\s+Product \(FRU\) Number\s+: (.+)", line)
                 if m:
                     diaginfo[name + item]['Part number'] = m.group(1)
+                    continue
 
                 m = re.search("\s+PCB Serial Number\s+: (.+)", line)
                 if m:
                    diaginfo[name + item]['Serial number'] = m.group(1)
+                   continue
 
             # processes "show CDP neighbors detail" command or section of sh tech
             if command == 'show cdp neighbors detail':
@@ -484,10 +514,12 @@ for arg in sys.argv[2:]:
                 m = re.search("^Device ID: ([a-zA-Z0-9][a-zA-Z0-9_\-\.]*)", line)
                 if m:
                     cdp_neighbor = m.group(1)
+                    continue
 
                 m = re.search("^  IP address: (.*)", line)
                 if m:
                     cdp_ip = m.group(1)
+                    continue
 
                 m = re.search("Interface: ([\w\/]+),  Port ID \(outgoing port\): (.*)", line)
                 if m:
@@ -511,7 +543,7 @@ for arg in sys.argv[2:]:
 
                     cdp_neighbor = ''
                     cdp_ip = ''
-
+                    continue
 
 
 # Writes all the information collected
@@ -609,4 +641,6 @@ if cont > 0:
 
 else:
     print("No device found")
+
+print("%s seconds" %(time.time() - start_time))
 
