@@ -9,7 +9,7 @@
 #
 # usage: python tech2xl <Excel output file> <inputfile>...
 #
-# Author: Andrés González, dec 2015
+# Author: Andres Gonzelez, dec 2015
 
 import re, glob, sys, csv, collections
 import xlwt
@@ -17,8 +17,9 @@ import time
 
 def expand(s, list):
     for item in list:
-        if re.match(s, item, re.IGNORECASE):
-            return item
+        if len(s) <= len(item):
+            if s.lower() == item.lower()[:len(s)]:
+                return item
     return None
 
 start_time = time.time()
@@ -91,15 +92,6 @@ diagfields = ["Name", "Slot", "Subslot", "Serial number", "Part number"]
 
 masks = ["128.0.0.0","192.0.0.0","224.0.0.0","240.0.0.0","248.0.0.0","252.0.0.0","254.0.0.0","255.0.0.0","255.128.0.0","255.192.0.0","255.224.0.0","255.240.0.0","255.248.0.0","255.252.0.0","255.254.0.0","255.255.0.0","255.255.128.0","255.255.192.0","255.255.224.0","255.255.240.0","255.255.248.0","255.255.252.0","255.255.254.0","255.255.255.0","255.255.255.128","255.255.255.192","255.255.255.224","255.255.255.240","255.255.255.248","255.255.255.252","255.255.255.254","255.255.255.255"]
 
-# This is the name of the router
-name = ''
-
-# Identifies the section of the file that is currently being read
-command = ''
-section = ''
-item = ''
-
-take_next_line = ''
 
 # takes all arguments starting from 2nd
 for arg in sys.argv[2:]:
@@ -107,6 +99,17 @@ for arg in sys.argv[2:]:
     for file in glob.glob(arg):
 
         infile = open(file, "r")
+        
+        # This is the name of the router
+        name = ''
+
+        # Identifies the section of the file that is currently being read
+        command = ''
+        section = ''
+        item = ''
+        cdp_neighbor = ''
+
+        take_next_line = ''
 
         for line in infile:
 
@@ -127,6 +130,10 @@ for arg in sys.argv[2:]:
 
                 if name not in intinfo.keys():
                     intinfo[name] = collections.OrderedDict()
+
+                if name not in cdpinfo.keys():
+                    cdpinfo[name] = collections.OrderedDict()
+
                 continue
 
             # detects section within show tech
@@ -138,7 +145,7 @@ for arg in sys.argv[2:]:
                 continue
 
             # processes "show running-config" command or section of sh tech
-            if command == 'show running-config':
+            if command == 'show running-config' and name != '':
                 # extracts information as per patterns
 
                 m = re.match("interface (\S*)", line)
@@ -208,7 +215,7 @@ for arg in sys.argv[2:]:
                         continue
 
             # processes "show version" command or section of sh tech
-            if command == 'show version':
+            if command == 'show version' and name != '':
                 # extracts information as per patterns
                 m = re.search("Processor board ID (.*)", line)
                 if m:
@@ -256,7 +263,7 @@ for arg in sys.argv[2:]:
                     continue
 
             # processes "show interfaces" command or section of sh tech
-            if command == 'show interfaces':
+            if command == 'show interfaces' and name != '':
                 # extracts information as per patterns
 
                 m = re.search("^(\S+) is ([\w|\s]+), line protocol is (\w+)", line)
@@ -365,7 +372,7 @@ for arg in sys.argv[2:]:
 
 
             # processes "show interfaces status" command or section of sh tech
-            if command == 'show interfaces status':
+            if command == 'show interfaces status' and name != '':
                 if (line[:4] != "Port"):
                     item = expand(line[:2], int_types)
 
@@ -399,7 +406,7 @@ for arg in sys.argv[2:]:
                         
 
             # processes "show CDP neighbors" command or section of sh tech
-            if command == 'show cdp neighbors':
+            if command == 'show cdp neighbors' and name != '':
                 # extracts information as per patterns
 
                 m = re.search("^([a-zA-Z0-9][a-zA-Z0-9_\-\.]*)$", line)
@@ -440,8 +447,7 @@ for arg in sys.argv[2:]:
                     continue
 
                 m = re.search("^([a-zA-Z0-9][a-zA-Z0-9_\-\.]*)\s+(...) ([\d/]+)\s+\d+\s+", line)
-                if m and cdp_neighbor != '':
-
+                if m:
                     cdp_neighbor = m.group(1)
                     local_int = expand(m.group(2), int_types) + m.group(3)
                     remote_int_draft = line[68:-1]
@@ -471,18 +477,19 @@ for arg in sys.argv[2:]:
 
 
             # processes "show diag" command
-            if command == 'show diag':
+            if command == 'show diag' and name != '':
                 # extracts information as per patterns
                 m = re.search("^(\S.*):$", line)
                 if m and not re.search("EEPROM contents", line):
                     slot = m.group(1)
                     subslot = ''
                     item = slot
-                    if (name + item) not in cdpinfo.keys():
+                    if (name + item) not in diaginfo.keys():
                         diaginfo[name + item] = collections.OrderedDict()
                     diaginfo[name + item]['Name'] = name
                     diaginfo[name + item]['Slot'] = slot
                     diaginfo[name + item]['Subslot'] = subslot
+                    
                     continue
 
                 # submodules are showed indented from base modules                    
@@ -504,11 +511,11 @@ for arg in sys.argv[2:]:
 
                 m = re.search("\s+PCB Serial Number\s+: (.+)", line)
                 if m:
-                   diaginfo[name + item]['Serial number'] = m.group(1)
-                   continue
+                    diaginfo[name + item]['Serial number'] = m.group(1)
+                    continue
 
             # processes "show CDP neighbors detail" command or section of sh tech
-            if command == 'show cdp neighbors detail':
+            if command == 'show cdp neighbors detail' and name != '':
                 # extracts information as per patterns
 
                 m = re.search("^Device ID: ([a-zA-Z0-9][a-zA-Z0-9_\-\.]*)", line)
@@ -628,7 +635,6 @@ if cont > 0:
         for item in diaginfo.keys():
 
             for col in range(0,len(diagfields)):
-
                 ws_diag.write(row, col, diaginfo[item][diagfields[col]])
 
             row = row + 1
