@@ -22,17 +22,6 @@ def expand(s, list):
                 return item
     return None
 
-start_time = time.time()
-print("tech2xl v1.1")
-
-if len(sys.argv) < 3:
-    print("Usage: tech2xl <output file> <input files>...")
-    sys.exit(2)
-
-commands = [["show"], \
-            ["version", "cdp", "technical-support", "running-config", "interfaces", "diag"], \
-            ["neighbors", "status"], \
-            ["detail"]]
 
 def expand_string(s, list):
     result = ''
@@ -43,6 +32,18 @@ def expand_string(s, list):
         else:
             return None
     return result[1:]
+
+start_time = time.time()
+print("tech2xl v1.4")
+
+if len(sys.argv) < 3:
+    print("Usage: tech2xl <output file> <input files>...")
+    sys.exit(2)
+
+commands = [["show"], \
+            ["version", "cdp", "technical-support", "running-config", "interfaces", "diag", "inventory"], \
+            ["neighbors", "status"], \
+            ["detail"]]
 
 
 int_types = ["Ethernet", "FastEthernet", "GigabitEthernet", "Gigabit", "TenGigabit", "Serial", "ATM", "Port-channel", "Tunnel", "Loopback"]
@@ -88,7 +89,7 @@ intfields = ["Name", \
 
 cdpfields = ["Name", "Local interface", "Remote device name", "Remote device domain", "Remote interface", "Remote device IP"]
 
-diagfields = ["Name", "Slot", "Subslot", "Serial number", "Part number"]
+diagfields = ["Name", "Slot", "Subslot", "Description", "Serial number", "Part number"]
 
 masks = ["128.0.0.0","192.0.0.0","224.0.0.0","240.0.0.0","248.0.0.0","252.0.0.0","254.0.0.0","255.0.0.0","255.128.0.0","255.192.0.0","255.224.0.0","255.240.0.0","255.248.0.0","255.252.0.0","255.254.0.0","255.255.0.0","255.255.128.0","255.255.192.0","255.255.224.0","255.255.240.0","255.255.248.0","255.255.252.0","255.255.254.0","255.255.255.0","255.255.255.128","255.255.255.192","255.255.255.224","255.255.255.240","255.255.255.248","255.255.255.252","255.255.255.254","255.255.255.255"]
 
@@ -109,7 +110,7 @@ for arg in sys.argv[2:]:
         item = ''
         cdp_neighbor = ''
 
-        take_next_line = ''
+        take_next_line = 0
 
         for line in infile:
 
@@ -118,9 +119,12 @@ for arg in sys.argv[2:]:
             # avoids a false positive in the "show switch detail" or "show flash: all" section of show tech
             if m and not (command == "show switch detail" or command == "show flash: all"):
 
-                name = m.group(1)
-                command = expand_string(m.group(2), commands)
+                if name == '':
+                    infile.seek(0)
+                else:                
+                    command = expand_string(m.group(2), commands)
 
+                name = m.group(1)
                 section = ''
                 item = ''
 
@@ -145,8 +149,29 @@ for arg in sys.argv[2:]:
                 continue
 
             # processes "show running-config" command or section of sh tech
-            if command == 'show running-config' and name != '':
+            if command == 'show running-config':
                 # extracts information as per patterns
+
+                m = re.match("hostname ([a-zA-Z0-9][a-zA-Z0-9_\-\.]*)", line)
+                if m:
+                    if name == '':
+                        name = m.group(1)
+                        infile.seek(0)
+
+                        section = ''
+                        item = ''
+
+                        if name not in systeminfo.keys():
+                            systeminfo[name] = collections.OrderedDict(zip(systemfields, [''] * len(systemfields)))
+                            systeminfo[name]['Name'] = name
+
+                        if name not in intinfo.keys():
+                            intinfo[name] = collections.OrderedDict()
+
+                        if name not in cdpinfo.keys():
+                            cdpinfo[name] = collections.OrderedDict()
+
+                    continue
 
                 m = re.match("interface (\S*)", line)
                 if m:
@@ -476,32 +501,97 @@ for arg in sys.argv[2:]:
                     cdp_neighbor = ''
 
 
-            # processes "show diag" command
-            if command == 'show diag' and name != '':
+            # processes "show inventory" command
+            if command == 'show inventory' and name != '':
+
                 # extracts information as per patterns
-                m = re.search("^(\S.*):$", line)
-                if m and not re.search("EEPROM contents", line):
+                m = re.search('NAME: .* on Slot (\d+) SubSlot (\d+)\", DESCR: \"(.+)\"', line)
+                if m:
+                    slot = m.group(1)
+                    subslot = m.group(2)
+                    item = slot + '-' + subslot
+                    if (name + item) not in diaginfo.keys():
+                        diaginfo[name + item] = collections.OrderedDict(zip(diagfields, [''] * len(diagfields)))
+                    diaginfo[name + item]['Name'] = name
+                    diaginfo[name + item]['Slot'] = slot
+                    diaginfo[name + item]['Subslot'] = subslot
+                    diaginfo[name + item]['Description'] = m.group(3)
+
+                    continue
+                    
+                # extracts information as per patterns
+                m = re.search('NAME: .* on Slot (\d+)\", DESCR: \"(.+)\"', line)
+                if m:
                     slot = m.group(1)
                     subslot = ''
                     item = slot
                     if (name + item) not in diaginfo.keys():
-                        diaginfo[name + item] = collections.OrderedDict()
+                        diaginfo[name + item] = collections.OrderedDict(zip(diagfields, [''] * len(diagfields)))
+                    diaginfo[name + item]['Name'] = name
+                    diaginfo[name + item]['Slot'] = slot
+                    diaginfo[name + item]['Subslot'] = subslot
+                    diaginfo[name + item]['Description'] = m.group(2)
+
+                    continue
+                    
+                m = re.search('PID: (.*)\s*, VID: .*, SN: (\S+)', line)
+                if m and item != '':
+                    diaginfo[name + item]['Name'] = name
+                    diaginfo[name + item]['Slot'] = slot
+                    diaginfo[name + item]['Subslot'] = subslot
+                    diaginfo[name + item]['Part number'] = m.group(1)
+                    diaginfo[name + item]['Serial number'] = m.group(2)
+
+                    continue
+
+
+            # processes "show diag" command
+            if command == 'show diag' and name != '':
+                # extracts information as per patterns
+                m = re.search("^(.*) EEPROM:$", line)
+                if m:
+                    slot = m.group(1)
+                    subslot = ''
+                    item = slot
+                    if (name + item) not in diaginfo.keys():
+                        diaginfo[name + item] = collections.OrderedDict(zip(diagfields, [''] * len(diagfields)))
                     diaginfo[name + item]['Name'] = name
                     diaginfo[name + item]['Slot'] = slot
                     diaginfo[name + item]['Subslot'] = subslot
                     
                     continue
 
-                # submodules are showed indented from base modules                    
-                m = re.search("^\s+(\S.*):$", line)
-                if m and not re.search("EEPROM contents", line):
-                    subslot = m.group(1)
-                    item = slot + subslot
-                    if (name + item) not in cdpinfo.keys():
-                        diaginfo[name + item] = collections.OrderedDict()
+                m = re.search("^Slot (\d+):$", line)
+                if m:
+                    slot = m.group(1)
+                    subslot = ''
+                    item = slot
+                    if (name + item) not in diaginfo.keys():
+                        diaginfo[name + item] = collections.OrderedDict(zip(diagfields, [''] * len(diagfields)))
                     diaginfo[name + item]['Name'] = name
                     diaginfo[name + item]['Slot'] = slot
                     diaginfo[name + item]['Subslot'] = subslot
+                    take_next_line = 1
+                    
+                    continue
+
+                # submodules are showed indented from base modules                    
+                m = re.search("^\s.*Slot (\d+):$", line)
+                if m:
+                    subslot = m.group(1)
+                    item = slot + '-' + subslot
+                    if (name + item) not in cdpinfo.keys():
+                        diaginfo[name + item] = collections.OrderedDict(zip(diagfields, [''] * len(diagfields)))
+                    diaginfo[name + item]['Name'] = name
+                    diaginfo[name + item]['Slot'] = slot
+                    diaginfo[name + item]['Subslot'] = subslot
+                    take_next_line = 1
+
+                    continue
+                    
+                if take_next_line == 1:
+                    diaginfo[name + item]['Description'] = line.strip()
+                    take_next_line = 0
                     continue
                     
                 m = re.search("\s+Product \(FRU\) Number\s+: (.+)", line)
@@ -509,7 +599,17 @@ for arg in sys.argv[2:]:
                     diaginfo[name + item]['Part number'] = m.group(1)
                     continue
 
+                m = re.search("\s+FRU Part Number\s+(.+)", line)
+                if m:
+                    diaginfo[name + item]['Part number'] = m.group(1)
+                    continue
+
                 m = re.search("\s+PCB Serial Number\s+: (.+)", line)
+                if m:
+                    diaginfo[name + item]['Serial number'] = m.group(1)
+                    continue
+
+                m = re.search("\s+Serial number\s+(\S+)", line)
                 if m:
                     diaginfo[name + item]['Serial number'] = m.group(1)
                     continue
@@ -626,7 +726,7 @@ if cont > 0:
     print(cont, " modules")
 
     if cont > 0:
-        ws_diag = wb.add_sheet('Show diag')
+        ws_diag = wb.add_sheet('Modules')
 
         for i, value in enumerate(diagfields):
             ws_diag.write(0, i, value, style_header)
@@ -649,4 +749,3 @@ else:
     print("No device found")
 
 print("%s seconds" %(time.time() - start_time))
-

@@ -40,6 +40,7 @@ Commands (and sections of a "show technical-support") supported
 - show cdp neighbors
 - show cdp neighbors detail
 - show diag
+- show inventory
 
 Excel file output format
 ------------------------
@@ -104,6 +105,7 @@ Modules sheet:
 - Name: hostname of local device
 - Slot: main slot of module
 - Subslot: where in main slot is the module
+- Description: of the module
 - Part number: of the module
 - Serial number: of the module
 
