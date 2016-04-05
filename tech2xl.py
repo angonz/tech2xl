@@ -34,7 +34,7 @@ def expand_string(s, list):
     return result[1:]
 
 start_time = time.time()
-print("tech2xl v1.4")
+print("tech2xl v1.5")
 
 if len(sys.argv) < 3:
     print("Usage: tech2xl <output file> <input files>...")
@@ -115,14 +115,20 @@ for arg in sys.argv[2:]:
         for line in infile:
 
             # checks for device name in prompt
-            m = re.search("^([a-zA-Z0-9][a-zA-Z0-9_\-\.]*)[#>]\s*(.*)", line)
+            m = re.search("^([a-zA-Z0-9][a-zA-Z0-9_\-\.]*)[#>]\s*([\w\-\_\s\b\a]*)", line)
             # avoids a false positive in the "show switch detail" or "show flash: all" section of show tech
             if m and not (command == "show switch detail" or command == "show flash: all"):
 
                 if name == '':
                     infile.seek(0)
-                else:                
-                    command = expand_string(m.group(2), commands)
+                else:
+                    #removes all deleted chars with backspace (\b) and bell chars (\a)
+                    cli = m.group(2)
+
+                    while re.search("\b|\a", cli):
+                        cli = re.sub("[^\b]\b|\a", "", cli)
+                        cli = re.sub("^\b", "", cli)
+                    command = expand_string(cli, commands)
 
                 name = m.group(1)
                 section = ''
@@ -749,3 +755,4 @@ else:
     print("No device found")
 
 print("%s seconds" %(time.time() - start_time))
+
