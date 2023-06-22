@@ -419,11 +419,11 @@ for arg in sys.argv[2:]:
 
                     m = re.search("(.+) (connected|notconnect|disabled)\s+(\S+)\s+(\S+)\s+(\S+)\s+(.*)", line[8:])
                     if m:
-                        if intinfo[name][item]['Description'] == '':
+                        if not intinfo[name][item].get('Description'):
                             intinfo[name][item]['Description'] = m.group(1)
-                        if intinfo[name][item]['Status'] == '':
+                        if not intinfo[name][item].get('Status'):
                             intinfo[name][item]['Status'] = m.group(2)
-                        if intinfo[name][item]['Access vlan'] == '':
+                        if not intinfo[name][item].get('Access vlan'):
                             if m.group(3) == 'trunk':
                                 intinfo[name][item]['Switchport mode'] = 'trunk'
                             elif m.group(3) == 'routed':
